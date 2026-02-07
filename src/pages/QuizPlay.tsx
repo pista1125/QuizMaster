@@ -1,0 +1,299 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { AnswerButton } from '@/components/AnswerButton';
+import { Timer } from '@/components/Timer';
+import { ProgressBar } from '@/components/ProgressBar';
+import { Logo } from '@/components/Logo';
+import { supabase } from '@/integrations/supabase/client';
+import { generateQuestions, shuffleAnswers, GeneratedQuestion } from '@/lib/quizGenerator';
+import { CheckCircle, XCircle, Trophy, Star, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+interface Question {
+  question: string;
+  correctAnswer: string;
+  answers: string[];
+}
+
+export default function QuizPlay() {
+  const { code } = useParams<{ code: string }>();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [showResult, setShowResult] = useState(false);
+  const [score, setScore] = useState(0);
+  const [timeLimit, setTimeLimit] = useState<number | null>(null);
+  const [roomData, setRoomData] = useState<any>(null);
+  const [isFinished, setIsFinished] = useState(false);
+  const [startTime, setStartTime] = useState<number>(0);
+
+  useEffect(() => {
+    const participantId = sessionStorage.getItem('participantId');
+    if (!participantId) {
+      navigate(`/join/${code}`);
+      return;
+    }
+
+    loadQuiz();
+  }, [code, navigate]);
+
+  const loadQuiz = async () => {
+    const { data: room, error } = await supabase
+      .from('rooms')
+      .select('*, quizzes(*)')
+      .eq('room_code', code)
+      .single();
+
+    if (error || !room) {
+      navigate('/');
+      return;
+    }
+
+    setRoomData(room);
+    setTimeLimit(room.time_limit_per_question);
+
+    const quiz = room.quizzes;
+    let loadedQuestions: Question[] = [];
+
+    if (quiz.quiz_type === 'dynamic') {
+      // Generate dynamic questions
+      const generated = generateQuestions(
+        quiz.dynamic_subtype as any,
+        quiz.question_count || 10
+      );
+
+      loadedQuestions = generated.map((q) => ({
+        question: q.question,
+        correctAnswer: q.correctAnswer,
+        answers: shuffleAnswers(q.correctAnswer, q.wrongAnswers),
+      }));
+    } else {
+      // Load static questions
+      const { data: staticQuestions } = await supabase
+        .from('static_questions')
+        .select('*')
+        .eq('quiz_id', quiz.id)
+        .order('order_index');
+
+      if (staticQuestions) {
+        loadedQuestions = staticQuestions.map((q) => ({
+          question: q.question_text,
+          correctAnswer: q.correct_answer,
+          answers: room.randomize_answers 
+            ? shuffleAnswers(q.correct_answer, q.wrong_answers)
+            : [q.correct_answer, ...q.wrong_answers],
+        }));
+      }
+    }
+
+    if (room.randomize_questions) {
+      loadedQuestions = loadedQuestions.sort(() => Math.random() - 0.5);
+    }
+
+    setQuestions(loadedQuestions);
+    setStartTime(Date.now());
+    setLoading(false);
+  };
+
+  const handleAnswer = async (answer: string) => {
+    if (showResult) return;
+
+    const timeTaken = Math.round((Date.now() - startTime) / 1000);
+    setSelectedAnswer(answer);
+    setShowResult(true);
+
+    const currentQuestion = questions[currentIndex];
+    const isCorrect = answer === currentQuestion.correctAnswer;
+
+    if (isCorrect) {
+      setScore((prev) => prev + 1);
+    }
+
+    // Save answer to database
+    const participantId = sessionStorage.getItem('participantId');
+    await supabase.from('answers').insert({
+      participant_id: participantId,
+      question_index: currentIndex,
+      question_text: currentQuestion.question,
+      given_answer: answer,
+      correct_answer: currentQuestion.correctAnswer,
+      is_correct: isCorrect,
+      time_taken_seconds: timeTaken,
+    });
+
+    // Move to next question after delay
+    setTimeout(() => {
+      if (currentIndex + 1 < questions.length) {
+        setCurrentIndex((prev) => prev + 1);
+        setSelectedAnswer(null);
+        setShowResult(false);
+        setStartTime(Date.now());
+      } else {
+        finishQuiz();
+      }
+    }, 1500);
+  };
+
+  const handleTimeUp = useCallback(() => {
+    if (!showResult && questions[currentIndex]) {
+      handleAnswer('');
+    }
+  }, [showResult, questions, currentIndex]);
+
+  const finishQuiz = async () => {
+    const participantId = sessionStorage.getItem('participantId');
+    await supabase
+      .from('participants')
+      .update({ finished_at: new Date().toISOString() })
+      .eq('id', participantId);
+
+    setIsFinished(true);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-xl font-medium">Kvíz betöltése...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isFinished) {
+    const percentage = Math.round((score / questions.length) * 100);
+    
+    return (
+      <div className="min-h-screen hero-gradient flex flex-col items-center justify-center p-4">
+        <div className="glass-card p-8 md:p-12 max-w-lg w-full text-center animate-scale-in">
+          <div className="mb-6">
+            <Trophy className="w-20 h-20 text-accent mx-auto floating-animation" />
+          </div>
+
+          <h1 className="text-4xl font-fredoka mb-4">Kvíz vége!</h1>
+          
+          <div className="mb-8">
+            <p className="text-6xl font-fredoka text-primary mb-2">
+              {score}/{questions.length}
+            </p>
+            <p className="text-xl text-muted-foreground">
+              {percentage}% helyes válasz
+            </p>
+          </div>
+
+          <div className="flex justify-center gap-1 mb-8">
+            {[...Array(5)].map((_, i) => (
+              <Star
+                key={i}
+                className={`w-8 h-8 ${
+                  i < Math.ceil(percentage / 20)
+                    ? 'text-accent fill-accent'
+                    : 'text-muted'
+                }`}
+              />
+            ))}
+          </div>
+
+          <p className="text-muted-foreground mb-6">
+            {percentage >= 80
+              ? '🎉 Kiváló munka!'
+              : percentage >= 60
+              ? '👍 Szép teljesítmény!'
+              : percentage >= 40
+              ? '💪 Jó próbálkozás!'
+              : '📚 Gyakorolj még!'}
+          </p>
+
+          <Button onClick={() => navigate('/')} size="lg" className="shadow-button">
+            Vissza a főoldalra
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const currentQuestion = questions[currentIndex];
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Header */}
+      <header className="bg-card border-b p-4">
+        <div className="container mx-auto flex items-center justify-between">
+          <Logo size="sm" />
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-sm text-muted-foreground">Pontszám</p>
+              <p className="text-2xl font-bold text-primary">{score}</p>
+            </div>
+            {timeLimit && (
+              <Timer
+                seconds={timeLimit}
+                onTimeUp={handleTimeUp}
+                isActive={!showResult}
+              />
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Progress */}
+      <div className="container mx-auto px-4 py-4">
+        <ProgressBar current={currentIndex + 1} total={questions.length} />
+      </div>
+
+      {/* Question */}
+      <main className="flex-1 container mx-auto px-4 py-8 flex flex-col">
+        <div className="quiz-card mb-8 text-center animate-fade-in">
+          <p className="text-sm text-muted-foreground mb-2">
+            Kérdés {currentIndex + 1}/{questions.length}
+          </p>
+          <h2 className="text-2xl md:text-4xl font-fredoka">
+            {currentQuestion.question}
+          </h2>
+        </div>
+
+        {/* Answer feedback */}
+        {showResult && (
+          <div className={`text-center mb-6 animate-scale-in ${
+            selectedAnswer === currentQuestion.correctAnswer
+              ? 'text-success'
+              : 'text-destructive'
+          }`}>
+            {selectedAnswer === currentQuestion.correctAnswer ? (
+              <div className="flex items-center justify-center gap-2">
+                <CheckCircle className="w-8 h-8" />
+                <span className="text-2xl font-bold">Helyes!</span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2">
+                <XCircle className="w-8 h-8" />
+                <span className="text-2xl font-bold">
+                  {selectedAnswer ? 'Helytelen!' : 'Lejárt az idő!'}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Answers */}
+        <div className="grid md:grid-cols-2 gap-4 flex-1">
+          {currentQuestion.answers.map((answer, index) => (
+            <AnswerButton
+              key={index}
+              answer={answer}
+              index={index}
+              onClick={() => handleAnswer(answer)}
+              disabled={showResult}
+              selected={selectedAnswer === answer}
+              isCorrect={answer === currentQuestion.correctAnswer}
+              showResult={showResult}
+            />
+          ))}
+        </div>
+      </main>
+    </div>
+  );
+}
