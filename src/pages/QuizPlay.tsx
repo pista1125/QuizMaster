@@ -67,47 +67,61 @@ export default function QuizPlay() {
 
   // Subscribe to room changes for manual mode
   useEffect(() => {
-    if (!roomData || roomData.question_mode !== 'manual') return;
+    if (!roomData?.id || roomData.question_mode !== 'manual') return;
 
     const channel = supabase
-      .channel('room-updates')
+      .channel(`room-${roomData.id}`)
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'rooms',
-          filter: `room_code=eq.${code}`,
+          filter: `id=eq.${roomData.id}`,
         },
         (payload) => {
+          console.log('Realtime update received:', payload.new);
           const newRoom = payload.new as any;
+
+          // Update room data first
           setRoomData(prev => prev ? { ...prev, ...newRoom } : prev);
 
-          // Check if new question started
-          const isNewQuestion = newRoom.current_question_index !== null &&
-            (newRoom.current_question_index !== currentIndex || waitingForQuestion);
-
-          if (isNewQuestion && !showResult) {
-            setCurrentIndex(newRoom.current_question_index);
-            setSelectedAnswer(null);
-            setShowResult(false);
-            setWaitingForQuestion(false);
-            setWaitingForResults(false);
-            setStartTime(Date.now());
+          // Logic to handle question changes
+          if (newRoom.current_question_index !== null) {
+            // If it's a different question or we were waiting, move to it
+            // We use a functional update for state check to be safe
+            setCurrentIndex(prevIndex => {
+              if (newRoom.current_question_index !== prevIndex || waitingForQuestion) {
+                setSelectedAnswer(null);
+                setShowResult(false);
+                setWaitingForQuestion(false);
+                setWaitingForResults(false);
+                setStartTime(Date.now());
+                return newRoom.current_question_index;
+              }
+              return prevIndex;
+            });
           }
 
           // Check if results should be shown
-          if (newRoom.show_results && waitingForResults) {
+          if (newRoom.show_results) {
+            setWaitingForResults(true);
+            setShowResult(true);
             loadQuestionResults(newRoom.current_question_index);
+          } else if (newRoom.show_results === false) {
+            // Teacher hid results, but usually we just wait for next question
+            setWaitingForResults(false);
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomData, code, currentIndex, showResult, waitingForResults]);
+  }, [roomData?.id, roomData?.question_mode, code]); // Reduced dependencies to prevent thrashing
 
   const loadQuiz = async () => {
     const { data: room, error } = await supabase
