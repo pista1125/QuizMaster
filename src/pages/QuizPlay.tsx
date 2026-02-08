@@ -48,11 +48,11 @@ export default function QuizPlay() {
   const [roomData, setRoomData] = useState<RoomData | null>(null);
   const [isFinished, setIsFinished] = useState(false);
   const [startTime, setStartTime] = useState<number>(0);
-  
+
   // Manual mode states
   const [waitingForQuestion, setWaitingForQuestion] = useState(false);
   const [waitingForResults, setWaitingForResults] = useState(false);
-  const [questionResults, setQuestionResults] = useState<{correct: number, total: number} | null>(null);
+  const [questionResults, setQuestionResults] = useState<{ correct: number, total: number } | null>(null);
 
   useEffect(() => {
     const participantId = sessionStorage.getItem('participantId');
@@ -81,11 +81,12 @@ export default function QuizPlay() {
         (payload) => {
           const newRoom = payload.new as any;
           setRoomData(prev => prev ? { ...prev, ...newRoom } : prev);
-          
+
           // Check if new question started
-          if (newRoom.current_question_index !== null && 
-              newRoom.current_question_index !== currentIndex &&
-              !showResult) {
+          const isNewQuestion = newRoom.current_question_index !== null &&
+            (newRoom.current_question_index !== currentIndex || waitingForQuestion);
+
+          if (isNewQuestion && !showResult) {
             setCurrentIndex(newRoom.current_question_index);
             setSelectedAnswer(null);
             setShowResult(false);
@@ -93,7 +94,7 @@ export default function QuizPlay() {
             setWaitingForResults(false);
             setStartTime(Date.now());
           }
-          
+
           // Check if results should be shown
           if (newRoom.show_results && waitingForResults) {
             loadQuestionResults(newRoom.current_question_index);
@@ -147,7 +148,7 @@ export default function QuizPlay() {
         loadedQuestions = staticQuestions.map((q) => ({
           question: q.question_text,
           correctAnswer: q.correct_answer,
-          answers: room.randomize_answers 
+          answers: room.randomize_answers
             ? shuffleAnswers(q.correct_answer, q.wrong_answers)
             : [q.correct_answer, ...q.wrong_answers],
         }));
@@ -159,7 +160,7 @@ export default function QuizPlay() {
     }
 
     setQuestions(loadedQuestions);
-    
+
     // For manual mode, check if quiz has started
     if (room.question_mode === 'manual') {
       if (room.current_question_index === null) {
@@ -168,19 +169,19 @@ export default function QuizPlay() {
         setCurrentIndex(room.current_question_index);
       }
     }
-    
+
     setStartTime(Date.now());
     setLoading(false);
   };
 
   const loadQuestionResults = async (questionIndex: number) => {
     if (!roomData) return;
-    
+
     const { data: answers } = await supabase
       .from('answers')
       .select('is_correct')
       .eq('question_index', questionIndex);
-    
+
     if (answers) {
       const correct = answers.filter(a => a.is_correct).length;
       setQuestionResults({ correct, total: answers.length });
@@ -277,7 +278,7 @@ export default function QuizPlay() {
 
   if (isFinished) {
     const percentage = Math.round((score / questions.length) * 100);
-    
+
     return (
       <div className="min-h-screen hero-gradient flex flex-col items-center justify-center p-4">
         <div className="glass-card p-8 md:p-12 max-w-lg w-full text-center animate-scale-in">
@@ -286,7 +287,7 @@ export default function QuizPlay() {
           </div>
 
           <h1 className="text-4xl font-fredoka mb-4">Kvíz vége!</h1>
-          
+
           <div className="mb-8">
             <p className="text-6xl font-fredoka text-primary mb-2">
               {score}/{questions.length}
@@ -300,11 +301,10 @@ export default function QuizPlay() {
             {[...Array(5)].map((_, i) => (
               <Star
                 key={i}
-                className={`w-8 h-8 ${
-                  i < Math.ceil(percentage / 20)
+                className={`w-8 h-8 ${i < Math.ceil(percentage / 20)
                     ? 'text-accent fill-accent'
                     : 'text-muted'
-                }`}
+                  }`}
               />
             ))}
           </div>
@@ -313,10 +313,10 @@ export default function QuizPlay() {
             {percentage >= 80
               ? '🎉 Kiváló munka!'
               : percentage >= 60
-              ? '👍 Szép teljesítmény!'
-              : percentage >= 40
-              ? '💪 Jó próbálkozás!'
-              : '📚 Gyakorolj még!'}
+                ? '👍 Szép teljesítmény!'
+                : percentage >= 40
+                  ? '💪 Jó próbálkozás!'
+                  : '📚 Gyakorolj még!'}
           </p>
 
           <Button onClick={() => navigate('/')} size="lg" className="shadow-button">
@@ -328,7 +328,7 @@ export default function QuizPlay() {
   }
 
   const currentQuestion = questions[currentIndex];
-  
+
   // Manual mode: Show results screen when teacher enables it
   if (roomData?.question_mode === 'manual' && roomData?.show_results && showResult) {
     return (
@@ -346,17 +346,16 @@ export default function QuizPlay() {
         <main className="flex-1 container mx-auto px-4 py-8 flex flex-col items-center justify-center">
           <div className="quiz-card max-w-2xl w-full text-center animate-scale-in">
             <h2 className="text-2xl font-fredoka mb-6">Eredmények</h2>
-            
+
             <div className="mb-6">
               <p className="text-muted-foreground mb-2">Kérdés:</p>
               <p className="text-xl font-medium">{currentQuestion.question}</p>
             </div>
 
-            <div className={`p-6 rounded-xl mb-6 ${
-              selectedAnswer === currentQuestion.correctAnswer 
-                ? 'bg-success/10 border-2 border-success' 
+            <div className={`p-6 rounded-xl mb-6 ${selectedAnswer === currentQuestion.correctAnswer
+                ? 'bg-success/10 border-2 border-success'
                 : 'bg-destructive/10 border-2 border-destructive'
-            }`}>
+              }`}>
               {selectedAnswer === currentQuestion.correctAnswer ? (
                 <div className="flex items-center justify-center gap-3">
                   <CheckCircle className="w-10 h-10 text-success" />
@@ -429,11 +428,10 @@ export default function QuizPlay() {
         </div>
 
         {showResult && (
-          <div className={`text-center mb-6 animate-scale-in ${
-            selectedAnswer === currentQuestion.correctAnswer
+          <div className={`text-center mb-6 animate-scale-in ${selectedAnswer === currentQuestion.correctAnswer
               ? 'text-success'
               : 'text-destructive'
-          }`}>
+            }`}>
             {selectedAnswer === currentQuestion.correctAnswer ? (
               <div className="flex items-center justify-center gap-2">
                 <CheckCircle className="w-8 h-8" />
@@ -447,7 +445,7 @@ export default function QuizPlay() {
                 </span>
               </div>
             )}
-            
+
             {roomData?.question_mode === 'manual' && (
               <p className="mt-2 text-muted-foreground text-sm animate-pulse">
                 Várakozás a tanárra...

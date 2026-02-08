@@ -4,9 +4,9 @@ import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  ArrowLeft, 
-  Users, 
+import {
+  ArrowLeft,
+  Users,
   Copy,
   StopCircle,
   RefreshCw,
@@ -132,7 +132,7 @@ export default function TeacherRoomControl() {
   const handleEndRoom = async () => {
     await supabase
       .from('rooms')
-      .update({ 
+      .update({
         is_active: false,
         ended_at: new Date().toISOString()
       })
@@ -146,7 +146,7 @@ export default function TeacherRoomControl() {
   const handleStartQuestion = async (questionIndex: number) => {
     await supabase
       .from('rooms')
-      .update({ 
+      .update({
         current_question_index: questionIndex,
         question_started_at: new Date().toISOString(),
         show_results: false
@@ -237,11 +237,10 @@ export default function TeacherRoomControl() {
             <p className="mt-4 text-xl">{roomData.quizzes.title}</p>
           )}
           <div className="mt-2">
-            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-              isManualMode 
-                ? 'bg-primary/10 text-primary' 
+            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${isManualMode
+                ? 'bg-primary/10 text-primary'
                 : 'bg-secondary/10 text-secondary'
-            }`}>
+              }`}>
               {isManualMode ? '🖐️ Manuális mód' : '⚡ Automatikus mód'}
             </span>
           </div>
@@ -257,49 +256,51 @@ export default function TeacherRoomControl() {
 
             {totalQuestions > 0 && (
               <div className="mb-4">
-                <ProgressBar 
-                  current={hasStarted ? currentQuestionIndex + 1 : 0} 
-                  total={totalQuestions} 
+                <ProgressBar
+                  current={hasStarted ? currentQuestionIndex + 1 : 0}
+                  total={totalQuestions}
                 />
               </div>
             )}
 
             <div className="flex flex-wrap gap-3">
               {!hasStarted ? (
-                <Button 
-                  onClick={() => handleStartQuestion(0)} 
+                <Button
+                  onClick={() => handleStartQuestion(0)}
                   size="lg"
-                  className="flex-1 md:flex-none"
+                  className="w-full md:w-auto h-16 text-xl font-bold bg-success hover:bg-success/90 shadow-lg animate-bounce-subtle"
                 >
-                  <Play className="w-5 h-5 mr-2" />
-                  Első kérdés indítása
+                  <Play className="w-6 h-6 mr-3" />
+                  KVÍZ INDÍTÁSA
                 </Button>
               ) : (
                 <>
-                  <Button 
+                  <Button
                     onClick={handleNextQuestion}
                     disabled={currentQuestionIndex >= totalQuestions - 1}
                     size="lg"
-                    className="flex-1 md:flex-none"
+                    className="flex-1 md:flex-none h-14 text-lg font-semibold"
                   >
                     <SkipForward className="w-5 h-5 mr-2" />
                     Következő kérdés ({currentQuestionIndex + 2}/{totalQuestions})
                   </Button>
 
                   {roomData?.show_results ? (
-                    <Button 
+                    <Button
                       onClick={handleHideResults}
                       variant="outline"
                       size="lg"
+                      className="h-14"
                     >
                       <EyeOff className="w-5 h-5 mr-2" />
                       Eredmények elrejtése
                     </Button>
                   ) : (
-                    <Button 
+                    <Button
                       onClick={handleShowResults}
                       variant="secondary"
                       size="lg"
+                      className="h-14"
                     >
                       <Eye className="w-5 h-5 mr-2" />
                       Eredmények mutatása
@@ -310,12 +311,18 @@ export default function TeacherRoomControl() {
             </div>
 
             {hasStarted && (
-              <p className="mt-4 text-muted-foreground text-sm">
-                Aktuális kérdés: <strong>{currentQuestionIndex + 1}</strong> / {totalQuestions}
-                {roomData?.show_results && (
-                  <span className="ml-2 text-success font-medium">• Eredmények láthatók</span>
-                )}
-              </p>
+              <div className="mt-6 p-4 rounded-xl bg-primary/5 border border-primary/10">
+                <p className="text-muted-foreground text-sm flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  Aktuális folyamat: <strong>{currentQuestionIndex + 1}</strong> / {totalQuestions} kérdés
+                  {roomData?.show_results && (
+                    <span className="ml-auto text-success font-medium flex items-center gap-1">
+                      <CheckCircle className="w-4 h-4" />
+                      Eredmények láthatók a diákoknál
+                    </span>
+                  )}
+                </p>
+              </div>
             )}
           </div>
         )}
@@ -338,8 +345,8 @@ export default function TeacherRoomControl() {
         <h2 className="text-2xl font-fredoka mb-4 flex items-center gap-2">
           <Users className="w-6 h-6" />
           Résztvevők
-          <RefreshCw 
-            className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary transition-colors" 
+          <RefreshCw
+            className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary transition-colors"
             onClick={loadRoom}
           />
         </h2>
@@ -359,16 +366,14 @@ export default function TeacherRoomControl() {
             {participants.map((participant) => (
               <div
                 key={participant.id}
-                className={`quiz-card flex items-center gap-3 ${
-                  participant.finished_at ? 'border-2 border-success' : ''
-                }`}
+                className={`quiz-card flex items-center gap-3 ${participant.finished_at ? 'border-2 border-success' : ''
+                  }`}
               >
                 <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${
-                    participant.finished_at
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${participant.finished_at
                       ? 'bg-success text-success-foreground'
                       : 'hero-gradient text-primary-foreground'
-                  }`}
+                    }`}
                 >
                   {participant.student_name[0].toUpperCase()}
                 </div>

@@ -11,11 +11,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { generateRoomCode } from '@/lib/quizGenerator';
 import { toast } from 'sonner';
-import { 
-  LogOut, 
-  Plus, 
-  Play, 
-  Copy, 
+import { QuizCreator } from '@/components/teacher/QuizCreator';
+import {
+  LogOut,
+  Plus,
+  Play,
+  Copy,
   Users,
   Shuffle,
   Clock,
@@ -52,8 +53,9 @@ export default function TeacherDashboard() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
+  const [showQuizCreator, setShowQuizCreator] = useState(false);
   const [loading, setLoading] = useState(false);
-  
+
   // Room creation form
   const [className, setClassName] = useState('');
   const [gradeLevel, setGradeLevel] = useState<string>('');
@@ -77,8 +79,8 @@ export default function TeacherDashboard() {
     const { data } = await supabase
       .from('quizzes')
       .select('*')
-      .order('created_at', { ascending: true });
-    
+      .order('created_at', { ascending: false });
+
     if (data) {
       setQuizzes(data as Quiz[]);
     }
@@ -87,10 +89,10 @@ export default function TeacherDashboard() {
   const fetchRooms = async () => {
     const { data } = await supabase
       .from('rooms')
-      .select('*')
+      .select('*, quizzes(*)')
       .eq('teacher_id', user?.id)
       .order('created_at', { ascending: false });
-    
+
     if (data) {
       setRooms(data as Room[]);
     }
@@ -158,6 +160,17 @@ export default function TeacherDashboard() {
     navigate('/');
   };
 
+  if (showQuizCreator) {
+    return (
+      <div className="min-h-screen bg-background p-4 md:p-10">
+        <QuizCreator
+          onClose={() => setShowQuizCreator(false)}
+          onRefresh={fetchQuizzes}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -165,6 +178,14 @@ export default function TeacherDashboard() {
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <Logo size="sm" />
           <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowQuizCreator(true)}
+              className="border-primary/50 text-primary hover:bg-primary/10"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Saját kvíz készítése
+            </Button>
             <span className="text-muted-foreground hidden md:block">
               <GraduationCap className="w-4 h-4 inline mr-1" />
               Tanári fiók
@@ -194,7 +215,7 @@ export default function TeacherDashboard() {
           {showCreateRoom && (
             <div className="quiz-card animate-fade-in">
               <h3 className="text-xl font-bold mb-6">Válassz kvízt</h3>
-              
+
               <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 {quizzes.map((quiz) => (
                   <QuizCard
@@ -213,7 +234,7 @@ export default function TeacherDashboard() {
               {selectedQuiz && (
                 <div className="border-t pt-6 mt-6 space-y-6 animate-fade-in">
                   <h3 className="text-xl font-bold">Szoba beállítások</h3>
-                  
+
                   <div className="grid md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label htmlFor="className" className="flex items-center gap-2">
@@ -315,8 +336,8 @@ export default function TeacherDashboard() {
                         <div>
                           <p className="font-medium">Kérdések kezelése</p>
                           <p className="text-sm text-muted-foreground">
-                            {questionMode === 'automatic' 
-                              ? 'Automatikus: a diákok saját tempóban haladnak' 
+                            {questionMode === 'automatic'
+                              ? 'Automatikus: a diákok saját tempóban haladnak'
                               : 'Manuális: te indítod a kérdéseket egyesével'}
                           </p>
                         </div>
@@ -350,7 +371,7 @@ export default function TeacherDashboard() {
         {/* Active Rooms Section */}
         <section>
           <h2 className="text-2xl font-fredoka mb-6">Szobáim</h2>
-          
+
           {rooms.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
