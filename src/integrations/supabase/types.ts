@@ -133,14 +133,18 @@ export type Database = {
         Row: {
           class_name: string | null
           created_at: string | null
+          current_question_index: number | null
           ended_at: string | null
           grade_level: number | null
           id: string
           is_active: boolean | null
+          question_mode: Database["public"]["Enums"]["question_mode"]
+          question_started_at: string | null
           quiz_id: string | null
           randomize_answers: boolean | null
           randomize_questions: boolean | null
           room_code: string
+          show_results: boolean | null
           started_at: string | null
           teacher_id: string
           time_limit_per_question: number | null
@@ -148,14 +152,18 @@ export type Database = {
         Insert: {
           class_name?: string | null
           created_at?: string | null
+          current_question_index?: number | null
           ended_at?: string | null
           grade_level?: number | null
           id?: string
           is_active?: boolean | null
+          question_mode?: Database["public"]["Enums"]["question_mode"]
+          question_started_at?: string | null
           quiz_id?: string | null
           randomize_answers?: boolean | null
           randomize_questions?: boolean | null
           room_code: string
+          show_results?: boolean | null
           started_at?: string | null
           teacher_id: string
           time_limit_per_question?: number | null
@@ -163,14 +171,18 @@ export type Database = {
         Update: {
           class_name?: string | null
           created_at?: string | null
+          current_question_index?: number | null
           ended_at?: string | null
           grade_level?: number | null
           id?: string
           is_active?: boolean | null
+          question_mode?: Database["public"]["Enums"]["question_mode"]
+          question_started_at?: string | null
           quiz_id?: string | null
           randomize_answers?: boolean | null
           randomize_questions?: boolean | null
           room_code?: string
+          show_results?: boolean | null
           started_at?: string | null
           teacher_id?: string
           time_limit_per_question?: number | null
@@ -192,6 +204,7 @@ export type Database = {
           id: string
           order_index: number
           question_text: string
+          question_type: Database["public"]["Enums"]["question_type"]
           quiz_id: string
           wrong_answers: string[]
         }
@@ -201,6 +214,7 @@ export type Database = {
           id?: string
           order_index?: number
           question_text: string
+          question_type?: Database["public"]["Enums"]["question_type"]
           quiz_id: string
           wrong_answers: string[]
         }
@@ -210,6 +224,7 @@ export type Database = {
           id?: string
           order_index?: number
           question_text?: string
+          question_type?: Database["public"]["Enums"]["question_type"]
           quiz_id?: string
           wrong_answers?: string[]
         }
@@ -263,6 +278,8 @@ export type Database = {
         | "addition_double"
         | "fractions"
         | "angles"
+      question_mode: "automatic" | "manual"
+      question_type: "multiple_choice" | "free_text"
       quiz_type: "dynamic" | "static"
     }
     CompositeTypes: {
@@ -397,6 +414,8 @@ export const Constants = {
         "fractions",
         "angles",
       ],
+      question_mode: ["automatic", "manual"],
+      question_type: ["multiple_choice", "free_text"],
       quiz_type: ["dynamic", "static"],
     },
   },

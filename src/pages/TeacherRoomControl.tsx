@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
@@ -10,9 +10,14 @@ import {
   Copy,
   StopCircle,
   RefreshCw,
-  CheckCircle
+  CheckCircle,
+  Play,
+  SkipForward,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ProgressBar } from '@/components/ProgressBar';
 
 interface Participant {
   id: string;
@@ -21,13 +26,32 @@ interface Participant {
   finished_at: string | null;
 }
 
+interface RoomData {
+  id: string;
+  room_code: string;
+  quiz_id: string;
+  question_mode: 'automatic' | 'manual';
+  current_question_index: number | null;
+  question_started_at: string | null;
+  show_results: boolean;
+  time_limit_per_question: number | null;
+  is_active: boolean;
+  quizzes: {
+    id: string;
+    title: string;
+    quiz_type: 'dynamic' | 'static';
+    question_count: number;
+  };
+}
+
 export default function TeacherRoomControl() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [roomData, setRoomData] = useState<any>(null);
+  const [roomData, setRoomData] = useState<RoomData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [totalQuestions, setTotalQuestions] = useState(0);
 
   useEffect(() => {
     if (!user) {
@@ -35,7 +59,10 @@ export default function TeacherRoomControl() {
       return;
     }
     loadRoom();
-    subscribeToParticipants();
+    const unsubscribe = subscribeToParticipants();
+    return () => {
+      unsubscribe();
+    };
   }, [user, code]);
 
   const loadRoom = async () => {
@@ -50,7 +77,18 @@ export default function TeacherRoomControl() {
       return;
     }
 
-    setRoomData(room);
+    setRoomData(room as unknown as RoomData);
+
+    // Get total questions count
+    if (room.quizzes.quiz_type === 'static') {
+      const { count } = await supabase
+        .from('static_questions')
+        .select('*', { count: 'exact', head: true })
+        .eq('quiz_id', room.quiz_id);
+      setTotalQuestions(count || 0);
+    } else {
+      setTotalQuestions(room.quizzes.question_count || 10);
+    }
 
     const { data: participantsData } = await supabase
       .from('participants')
@@ -65,7 +103,7 @@ export default function TeacherRoomControl() {
     setLoading(false);
   };
 
-  const subscribeToParticipants = () => {
+  const subscribeToParticipants = useCallback(() => {
     const channel = supabase
       .channel('participants-updates')
       .on(
@@ -84,7 +122,7 @@ export default function TeacherRoomControl() {
     return () => {
       supabase.removeChannel(channel);
     };
-  };
+  }, []);
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(code || '');
@@ -104,6 +142,49 @@ export default function TeacherRoomControl() {
     navigate(`/teacher/results/${code}`);
   };
 
+  // Manual mode controls
+  const handleStartQuestion = async (questionIndex: number) => {
+    await supabase
+      .from('rooms')
+      .update({ 
+        current_question_index: questionIndex,
+        question_started_at: new Date().toISOString(),
+        show_results: false
+      })
+      .eq('room_code', code);
+
+    toast.success(`${questionIndex + 1}. kérdés elindítva!`);
+    loadRoom();
+  };
+
+  const handleShowResults = async () => {
+    await supabase
+      .from('rooms')
+      .update({ show_results: true })
+      .eq('room_code', code);
+
+    toast.success('Eredmények megjelenítve!');
+    loadRoom();
+  };
+
+  const handleHideResults = async () => {
+    await supabase
+      .from('rooms')
+      .update({ show_results: false })
+      .eq('room_code', code);
+
+    loadRoom();
+  };
+
+  const handleNextQuestion = async () => {
+    const nextIndex = (roomData?.current_question_index ?? -1) + 1;
+    if (nextIndex < totalQuestions) {
+      await handleStartQuestion(nextIndex);
+    } else {
+      toast.info('Ez volt az utolsó kérdés!');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -113,6 +194,9 @@ export default function TeacherRoomControl() {
   }
 
   const finishedCount = participants.filter((p) => p.finished_at).length;
+  const isManualMode = roomData?.question_mode === 'manual';
+  const currentQuestionIndex = roomData?.current_question_index;
+  const hasStarted = currentQuestionIndex !== null && currentQuestionIndex >= 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -152,7 +236,89 @@ export default function TeacherRoomControl() {
           {roomData?.quizzes && (
             <p className="mt-4 text-xl">{roomData.quizzes.title}</p>
           )}
+          <div className="mt-2">
+            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+              isManualMode 
+                ? 'bg-primary/10 text-primary' 
+                : 'bg-secondary/10 text-secondary'
+            }`}>
+              {isManualMode ? '🖐️ Manuális mód' : '⚡ Automatikus mód'}
+            </span>
+          </div>
         </div>
+
+        {/* Manual Mode Controls */}
+        {isManualMode && (
+          <div className="quiz-card mb-8">
+            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <Play className="w-5 h-5 text-primary" />
+              Kérdések irányítása
+            </h3>
+
+            {totalQuestions > 0 && (
+              <div className="mb-4">
+                <ProgressBar 
+                  current={hasStarted ? currentQuestionIndex + 1 : 0} 
+                  total={totalQuestions} 
+                />
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-3">
+              {!hasStarted ? (
+                <Button 
+                  onClick={() => handleStartQuestion(0)} 
+                  size="lg"
+                  className="flex-1 md:flex-none"
+                >
+                  <Play className="w-5 h-5 mr-2" />
+                  Első kérdés indítása
+                </Button>
+              ) : (
+                <>
+                  <Button 
+                    onClick={handleNextQuestion}
+                    disabled={currentQuestionIndex >= totalQuestions - 1}
+                    size="lg"
+                    className="flex-1 md:flex-none"
+                  >
+                    <SkipForward className="w-5 h-5 mr-2" />
+                    Következő kérdés ({currentQuestionIndex + 2}/{totalQuestions})
+                  </Button>
+
+                  {roomData?.show_results ? (
+                    <Button 
+                      onClick={handleHideResults}
+                      variant="outline"
+                      size="lg"
+                    >
+                      <EyeOff className="w-5 h-5 mr-2" />
+                      Eredmények elrejtése
+                    </Button>
+                  ) : (
+                    <Button 
+                      onClick={handleShowResults}
+                      variant="secondary"
+                      size="lg"
+                    >
+                      <Eye className="w-5 h-5 mr-2" />
+                      Eredmények mutatása
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+
+            {hasStarted && (
+              <p className="mt-4 text-muted-foreground text-sm">
+                Aktuális kérdés: <strong>{currentQuestionIndex + 1}</strong> / {totalQuestions}
+                {roomData?.show_results && (
+                  <span className="ml-2 text-success font-medium">• Eredmények láthatók</span>
+                )}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid md:grid-cols-2 gap-4 mb-8">
