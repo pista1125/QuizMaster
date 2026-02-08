@@ -20,7 +20,8 @@ import {
   Shuffle,
   Clock,
   GraduationCap,
-  School
+  School,
+  Hand
 } from 'lucide-react';
 
 interface Quiz {
@@ -41,6 +42,7 @@ interface Room {
   is_active: boolean;
   quiz_id: string | null;
   created_at: string;
+  question_mode: 'automatic' | 'manual';
 }
 
 export default function TeacherDashboard() {
@@ -59,6 +61,7 @@ export default function TeacherDashboard() {
   const [randomizeAnswers, setRandomizeAnswers] = useState(true);
   const [useTimeLimit, setUseTimeLimit] = useState(true);
   const [timeLimitPerQuestion, setTimeLimitPerQuestion] = useState(15);
+  const [questionMode, setQuestionMode] = useState<'automatic' | 'manual'>('automatic');
 
   useEffect(() => {
     if (!user) {
@@ -113,6 +116,7 @@ export default function TeacherDashboard() {
         randomize_questions: randomizeQuestions,
         randomize_answers: randomizeAnswers,
         time_limit_per_question: useTimeLimit ? timeLimitPerQuestion : null,
+        question_mode: questionMode,
       })
       .select()
       .single();
@@ -132,6 +136,7 @@ export default function TeacherDashboard() {
     setClassName('');
     setGradeLevel('');
     setSelectedQuiz(null);
+    setQuestionMode('automatic');
   };
 
   const handleCopyCode = (code: string) => {
@@ -302,6 +307,29 @@ export default function TeacherDashboard() {
                           onCheckedChange={setUseTimeLimit}
                         />
                       </div>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-muted">
+                      <div className="flex items-center gap-3">
+                        <Hand className="w-5 h-5 text-primary" />
+                        <div>
+                          <p className="font-medium">Kérdések kezelése</p>
+                          <p className="text-sm text-muted-foreground">
+                            {questionMode === 'automatic' 
+                              ? 'Automatikus: a diákok saját tempóban haladnak' 
+                              : 'Manuális: te indítod a kérdéseket egyesével'}
+                          </p>
+                        </div>
+                      </div>
+                      <Select value={questionMode} onValueChange={(v: 'automatic' | 'manual') => setQuestionMode(v)}>
+                        <SelectTrigger className="w-36">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="automatic">Automatikus</SelectItem>
+                          <SelectItem value="manual">Manuális</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
