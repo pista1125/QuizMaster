@@ -40,21 +40,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, displayName: string) => {
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: window.location.origin,
+        data: {
+          display_name: displayName,
+        },
       },
     });
-
-    if (!error && data.user) {
-      // Create teacher profile
-      await supabase.from('teacher_profiles').insert({
-        user_id: data.user.id,
-        display_name: displayName,
-      });
-    }
 
     return { error };
   };
