@@ -83,33 +83,27 @@ export default function QuizPlay() {
           console.log('Realtime update received:', payload.new);
           const newRoom = payload.new as any;
 
-          // Update room data first
           setRoomData(prev => prev ? { ...prev, ...newRoom } : prev);
 
-          // Logic to handle question changes
           if (newRoom.current_question_index !== null) {
-            // If it's a different question or we were waiting, move to it
-            // We use a functional update for state check to be safe
-            setCurrentIndex(prevIndex => {
-              if (newRoom.current_question_index !== prevIndex || waitingForQuestion) {
-                setSelectedAnswer(null);
-                setShowResult(false);
-                setWaitingForQuestion(false);
-                setWaitingForResults(false);
-                setStartTime(Date.now());
-                return newRoom.current_question_index;
-              }
-              return prevIndex;
-            });
+            const isTransition = newRoom.current_question_index !== currentIndex || waitingForQuestion;
+
+            if (isTransition) {
+              console.log('Transitioning to question:', newRoom.current_question_index);
+              setCurrentIndex(newRoom.current_question_index);
+              setSelectedAnswer(null);
+              setShowResult(false);
+              setWaitingForQuestion(false);
+              setWaitingForResults(false);
+              setStartTime(Date.now());
+            }
           }
 
-          // Check if results should be shown
           if (newRoom.show_results) {
             setWaitingForResults(true);
             setShowResult(true);
             loadQuestionResults(newRoom.current_question_index);
-          } else if (newRoom.show_results === false) {
-            // Teacher hid results, but usually we just wait for next question
+          } else if (newRoom.show_results === false && waitingForResults) {
             setWaitingForResults(false);
           }
         }
@@ -121,7 +115,7 @@ export default function QuizPlay() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomData?.id, roomData?.question_mode, code]); // Reduced dependencies to prevent thrashing
+  }, [roomData?.id, roomData?.question_mode, code, waitingForQuestion, currentIndex, showResult]);
 
   const loadQuiz = async () => {
     const { data: room, error } = await supabase
