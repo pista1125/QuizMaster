@@ -81,7 +81,8 @@ export function QuizCreator({ onClose, onRefresh }: QuizCreatorProps) {
                     title,
                     description,
                     quiz_type: 'static',
-                    question_count: questions.length
+                    question_count: questions.length,
+                    teacher_id: user?.id
                 })
                 .select()
                 .single();

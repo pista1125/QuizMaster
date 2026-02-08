@@ -79,6 +79,7 @@ export default function TeacherDashboard() {
     const { data } = await supabase
       .from('quizzes')
       .select('*')
+      .or(`teacher_id.eq.${user?.id},teacher_id.is.null`)
       .order('created_at', { ascending: false });
 
     if (data) {
