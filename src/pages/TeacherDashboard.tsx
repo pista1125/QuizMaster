@@ -22,8 +22,22 @@ import {
   Clock,
   GraduationCap,
   School,
-  Hand
+  Hand,
+  Trash2,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface Quiz {
   id: string;
@@ -44,6 +58,7 @@ interface Room {
   quiz_id: string | null;
   created_at: string;
   question_mode: 'automatic' | 'manual';
+  quizzes?: Quiz;
 }
 
 export default function TeacherDashboard() {
@@ -55,6 +70,7 @@ export default function TeacherDashboard() {
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [showQuizCreator, setShowQuizCreator] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   // Room creation form
   const [className, setClassName] = useState('');
@@ -71,32 +87,24 @@ export default function TeacherDashboard() {
       return;
     }
 
-    fetchQuizzes();
-    fetchRooms();
+    const init = async () => {
+      setInitialLoading(true);
+      await Promise.all([fetchQuizzes(), fetchRooms()]);
+      setInitialLoading(false);
+    };
+    init();
   }, [user, navigate]);
 
   const fetchQuizzes = async () => {
-    const { data } = await supabase
-      .from('quizzes')
-      .select('*')
-      .or(`teacher_id.eq.${user?.id},teacher_id.is.null`)
-      .order('created_at', { ascending: false });
-
-    if (data) {
-      setQuizzes(data as Quiz[]);
-    }
+    if (!user) return;
+    const data = await QuizService.fetchQuizzes(user.id);
+    setQuizzes(data as Quiz[]);
   };
 
   const fetchRooms = async () => {
-    const { data } = await supabase
-      .from('rooms')
-      .select('*, quizzes(*)')
-      .eq('teacher_id', user?.id)
-      .order('created_at', { ascending: false });
-
-    if (data) {
-      setRooms(data as Room[]);
-    }
+    if (!user) return;
+    const data = await QuizService.fetchRooms(user.id);
+    setRooms(data as Room[]);
   };
 
   const handleCreateRoom = async () => {
@@ -125,7 +133,7 @@ export default function TeacherDashboard() {
       .single();
 
     if (error) {
-      toast.error('Hiba történt a szoba létrehozásakor!');
+      toast.error('Hiba történt a szoba létrehozásakor: ' + error.message);
       setLoading(false);
       return;
     }
@@ -140,6 +148,11 @@ export default function TeacherDashboard() {
     setGradeLevel('');
     setSelectedQuiz(null);
     setQuestionMode('automatic');
+  };
+
+  const handleDeleteRoom = async (roomId: string) => {
+    const success = await QuizService.deleteRoom(roomId);
+    if (success) fetchRooms();
   };
 
   const handleCopyCode = (code: string) => {
@@ -160,6 +173,28 @@ export default function TeacherDashboard() {
     await signOut();
     navigate('/');
   };
+
+  if (showQuizCreator) {
+    return (
+      <div className="min-h-screen bg-background p-4 md:p-10">
+        <QuizCreator
+          onClose={() => setShowQuizCreator(false)}
+          onRefresh={fetchQuizzes}
+        />
+      </div>
+    );
+  }
+
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-xl font-medium font-fredoka">Műszerfal betöltése...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (showQuizCreator) {
     return (
@@ -218,18 +253,26 @@ export default function TeacherDashboard() {
               <h3 className="text-xl font-bold mb-6">Válassz kvízt</h3>
 
               <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                {quizzes.map((quiz) => (
-                  <QuizCard
-                    key={quiz.id}
-                    title={quiz.title}
-                    description={quiz.description || ''}
-                    type={quiz.quiz_type}
-                    questionCount={quiz.question_count || 10}
-                    timeLimit={quiz.time_limit_seconds || undefined}
-                    onClick={() => setSelectedQuiz(quiz)}
-                    selected={selectedQuiz?.id === quiz.id}
-                  />
-                ))}
+                {quizzes.length === 0 ? (
+                  <div className="col-span-full text-center py-10 bg-primary/5 rounded-2xl border-2 border-dashed border-primary/20">
+                    <AlertCircle className="w-10 h-10 mx-auto mb-3 text-primary opacity-50" />
+                    <p className="font-medium">Még nincs saját kvízed.</p>
+                    <p className="text-sm text-muted-foreground">Készíts egyet a fejlécben található gombbal!</p>
+                  </div>
+                ) : (
+                  quizzes.map((quiz) => (
+                    <QuizCard
+                      key={quiz.id}
+                      title={quiz.title}
+                      description={quiz.description || ''}
+                      type={quiz.quiz_type}
+                      questionCount={quiz.question_count || 10}
+                      timeLimit={quiz.time_limit_seconds || undefined}
+                      onClick={() => setSelectedQuiz(quiz)}
+                      selected={selectedQuiz?.id === quiz.id}
+                    />
+                  ))
+                )}
               </div>
 
               {selectedQuiz && (
@@ -374,60 +417,102 @@ export default function TeacherDashboard() {
           <h2 className="text-2xl font-fredoka mb-6">Szobáim</h2>
 
           {rooms.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>Még nincs létrehozott szobád.</p>
-              <p className="text-sm">Kattints az "Új szoba" gombra a kezdéshez!</p>
+            <div className="text-center py-12 px-6 rounded-3xl bg-muted/30 border-2 border-dashed border-muted">
+              <Users className="w-16 h-16 mx-auto mb-4 opacity-20" />
+              <p className="text-lg font-medium">Még nincs létrehozott szobád.</p>
+              <p className="text-sm text-muted-foreground mt-1">Kattints az "Új szoba" gombra a kezdéshez!</p>
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {rooms.map((room) => (
-                <div key={room.id} className="quiz-card">
+                <div key={room.id} className="quiz-card group relative">
+                  {!room.is_active && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Törlés megerősítése</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Biztosan törölni szeretnéd ezt a szobát? Ez a művelet nem vonható vissza.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Mégse</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDeleteRoom(room.id)} className="bg-destructive hover:bg-destructive/90">
+                            Törlés
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <span className={`w-3 h-3 rounded-full ${room.is_active ? 'bg-success' : 'bg-muted'}`} />
-                      <span className="text-sm font-medium">
+                      <span className={`w-3 h-3 rounded-full ${room.is_active ? 'bg-success animate-pulse' : 'bg-muted'}`} />
+                      <span className={`text-sm font-medium ${room.is_active ? 'text-success' : 'text-muted-foreground'}`}>
                         {room.is_active ? 'Aktív' : 'Lezárt'}
                       </span>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleCopyCode(room.room_code)}
-                    >
-                      <Copy className="w-4 h-4 mr-1" />
-                      Másolás
-                    </Button>
                   </div>
 
-                  <div className="text-center mb-4">
-                    <p className="text-sm text-muted-foreground mb-1">Szoba kód</p>
-                    <p className="text-3xl font-fredoka tracking-widest text-primary">
-                      {room.room_code}
-                    </p>
-                  </div>
-
-                  {(room.class_name || room.grade_level) && (
-                    <div className="text-center mb-4 text-muted-foreground">
-                      {room.class_name && <span>{room.class_name}</span>}
-                      {room.class_name && room.grade_level && <span> • </span>}
-                      {room.grade_level && <span>{room.grade_level}. osztály</span>}
+                  <div className="text-center mb-6">
+                    <p className="text-xs text-muted-foreground mb-1 uppercase tracking-tighter font-bold">Szoba kód</p>
+                    <div className="relative inline-block">
+                      <p className="text-4xl font-fredoka tracking-[0.2em] text-primary pl-[0.2em]">
+                        {room.room_code}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute -right-10 top-1/2 -translate-y-1/2 h-8 w-8"
+                        onClick={() => handleCopyCode(room.room_code)}
+                      >
+                        <Copy className="w-3 h-3" />
+                      </Button>
                     </div>
-                  )}
+                  </div>
+
+                  <div className="space-y-3 mb-6">
+                    {room.quizzes && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Play className="w-4 h-4 text-primary" />
+                        <span className="font-semibold truncate">{room.quizzes.title}</span>
+                      </div>
+                    )}
+                    {(room.class_name || room.grade_level) && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <School className="w-4 h-4" />
+                        <span>
+                          {room.class_name || ''}
+                          {room.class_name && room.grade_level ? ' • ' : ''}
+                          {room.grade_level ? `${room.grade_level}. osztály` : ''}
+                        </span>
+                      </div>
+                    )}
+                  </div>
 
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
-                      className="flex-1"
+                      className="flex-1 h-11"
                       onClick={() => navigate(`/teacher/results/${room.room_code}`)}
                     >
                       Eredmények
                     </Button>
                     <Button
-                      className="flex-1"
+                      className="flex-1 h-11 shadow-button"
+                      disabled={!room.is_active}
                       onClick={() => handleStartRoom(room)}
                     >
-                      <Play className="w-4 h-4 mr-2" />
+                      <Hand className="w-4 h-4 mr-2" />
                       Irányítás
                     </Button>
                   </div>

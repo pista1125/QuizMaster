@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { generateQuestions, shuffleAnswers } from '@/lib/quizGenerator';
 import { CheckCircle, XCircle, Trophy, Star, Loader2, Clock, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 interface Question {
   question: string;
@@ -138,11 +139,18 @@ export default function QuizPlay() {
         answers: shuffleAnswers(q.correctAnswer, q.wrongAnswers),
       }));
     } else {
-      const { data: staticQuestions } = await supabase
+      const { data: staticQuestions, error: staticError } = await supabase
         .from('static_questions')
         .select('*')
         .eq('quiz_id', quiz.id)
         .order('order_index');
+
+      if (staticError) {
+        console.error('Error loading questions:', staticError);
+        toast.error('Hiba történt a kérdések betöltésekor!');
+        navigate('/');
+        return;
+      }
 
       if (staticQuestions) {
         loadedQuestions = staticQuestions.map((q) => ({
@@ -156,7 +164,13 @@ export default function QuizPlay() {
     }
 
     if (room.randomize_questions) {
-      loadedQuestions = loadedQuestions.sort(() => Math.random() - 0.5);
+      loadedQuestions = [...loadedQuestions].sort(() => Math.random() - 0.5);
+    }
+
+    if (loadedQuestions.length === 0) {
+      toast.error('Ez a kvíz nem tartalmaz kérdéseket!');
+      navigate('/');
+      return;
     }
 
     setQuestions(loadedQuestions);
@@ -302,8 +316,8 @@ export default function QuizPlay() {
               <Star
                 key={i}
                 className={`w-8 h-8 ${i < Math.ceil(percentage / 20)
-                    ? 'text-accent fill-accent'
-                    : 'text-muted'
+                  ? 'text-accent fill-accent'
+                  : 'text-muted'
                   }`}
               />
             ))}
@@ -353,8 +367,8 @@ export default function QuizPlay() {
             </div>
 
             <div className={`p-6 rounded-xl mb-6 ${selectedAnswer === currentQuestion.correctAnswer
-                ? 'bg-success/10 border-2 border-success'
-                : 'bg-destructive/10 border-2 border-destructive'
+              ? 'bg-success/10 border-2 border-success'
+              : 'bg-destructive/10 border-2 border-destructive'
               }`}>
               {selectedAnswer === currentQuestion.correctAnswer ? (
                 <div className="flex items-center justify-center gap-3">
@@ -429,8 +443,8 @@ export default function QuizPlay() {
 
         {showResult && (
           <div className={`text-center mb-6 animate-scale-in ${selectedAnswer === currentQuestion.correctAnswer
-              ? 'text-success'
-              : 'text-destructive'
+            ? 'text-success'
+            : 'text-destructive'
             }`}>
             {selectedAnswer === currentQuestion.correctAnswer ? (
               <div className="flex items-center justify-center gap-2">
