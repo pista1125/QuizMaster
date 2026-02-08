@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AnswerButton } from '@/components/AnswerButton';
 import { Timer } from '@/components/Timer';
@@ -55,6 +55,15 @@ export default function QuizPlay() {
   const [waitingForResults, setWaitingForResults] = useState(false);
   const [questionResults, setQuestionResults] = useState<{ correct: number, total: number } | null>(null);
 
+  // Refs for tracking state in Realtime callbacks without triggering re-subscriptions
+  const currentIndexRef = useRef(currentIndex);
+  const waitingForQuestionRef = useRef(waitingForQuestion);
+  const waitingForResultsRef = useRef(waitingForResults);
+
+  useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
+  useEffect(() => { waitingForQuestionRef.current = waitingForQuestion; }, [waitingForQuestion]);
+  useEffect(() => { waitingForResultsRef.current = waitingForResults; }, [waitingForResults]);
+
   useEffect(() => {
     const participantId = sessionStorage.getItem('participantId');
     if (!participantId) {
@@ -86,7 +95,7 @@ export default function QuizPlay() {
           setRoomData(prev => prev ? { ...prev, ...newRoom } : prev);
 
           if (newRoom.current_question_index !== null) {
-            const isTransition = newRoom.current_question_index !== currentIndex || waitingForQuestion;
+            const isTransition = newRoom.current_question_index !== currentIndexRef.current || waitingForQuestionRef.current;
 
             if (isTransition) {
               console.log('Transitioning to question:', newRoom.current_question_index);
@@ -103,7 +112,7 @@ export default function QuizPlay() {
             setWaitingForResults(true);
             setShowResult(true);
             loadQuestionResults(newRoom.current_question_index);
-          } else if (newRoom.show_results === false && waitingForResults) {
+          } else if (newRoom.show_results === false && waitingForResultsRef.current) {
             setWaitingForResults(false);
           }
         }
@@ -115,7 +124,7 @@ export default function QuizPlay() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomData?.id, roomData?.question_mode, code, waitingForQuestion, currentIndex, showResult]);
+  }, [roomData?.id, roomData?.question_mode, code]); // Minimal dependencies to prevent connection thrashing
 
   const loadQuiz = async () => {
     const { data: room, error } = await supabase
