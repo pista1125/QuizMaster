@@ -136,6 +136,9 @@ CREATE POLICY "Teachers can create rooms" ON public.rooms FOR INSERT TO authenti
 DROP POLICY IF EXISTS "Teachers can view their own rooms" ON public.rooms;
 CREATE POLICY "Teachers can view their own rooms" ON public.rooms FOR SELECT TO authenticated USING (auth.uid() = teacher_id);
 
+DROP POLICY IF EXISTS "Teachers can update their own rooms" ON public.rooms;
+CREATE POLICY "Teachers can update their own rooms" ON public.rooms FOR UPDATE TO authenticated USING (auth.uid() = teacher_id);
+
 DROP POLICY IF EXISTS "Anyone can view active rooms" ON public.rooms;
 CREATE POLICY "Anyone can view active rooms" ON public.rooms FOR SELECT TO anon, authenticated USING (is_active = true);
 
@@ -146,8 +149,21 @@ CREATE POLICY "Teachers can delete their own rooms" ON public.rooms FOR DELETE T
 DROP POLICY IF EXISTS "Anyone can join as participant" ON public.participants;
 CREATE POLICY "Anyone can join as participant" ON public.participants FOR INSERT TO anon, authenticated WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Anyone can view participants" ON public.participants;
+CREATE POLICY "Anyone can view participants" ON public.participants FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "Participants can update their own record" ON public.participants;
+CREATE POLICY "Participants can update their own record" ON public.participants FOR UPDATE TO anon, authenticated USING (true);
+
 DROP POLICY IF EXISTS "Participants can insert answers" ON public.answers;
 CREATE POLICY "Participants can insert answers" ON public.answers FOR INSERT TO anon, authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anyone can view answers" ON public.answers;
+CREATE POLICY "Anyone can view answers" ON public.answers FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "Teachers can delete answers for their rooms" ON public.answers;
+CREATE POLICY "Teachers can delete answers for their rooms" ON public.answers FOR DELETE TO authenticated
+USING (EXISTS (SELECT 1 FROM public.participants p JOIN public.rooms r ON p.room_id = r.id WHERE p.id = answers.participant_id AND r.teacher_id = auth.uid()));
 
 -- 5. FUNCTIONS & TRIGGERS
 CREATE OR REPLACE FUNCTION public.handle_new_user()

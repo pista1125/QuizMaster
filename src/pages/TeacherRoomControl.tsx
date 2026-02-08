@@ -144,7 +144,7 @@ export default function TeacherRoomControl() {
 
   // Manual mode controls
   const handleStartQuestion = async (questionIndex: number) => {
-    await supabase
+    const { error } = await supabase
       .from('rooms')
       .update({
         current_question_index: questionIndex,
@@ -153,25 +153,41 @@ export default function TeacherRoomControl() {
       })
       .eq('room_code', code);
 
+    if (error) {
+      console.error("Error starting question:", error);
+      toast.error("Hiba történt a kérdés indításakor: " + error.message);
+      return;
+    }
+
     toast.success(`${questionIndex + 1}. kérdés elindítva!`);
     loadRoom();
   };
 
   const handleShowResults = async () => {
-    await supabase
+    const { error } = await supabase
       .from('rooms')
       .update({ show_results: true })
       .eq('room_code', code);
+
+    if (error) {
+      toast.error("Hiba történt az eredmények mutatása közben: " + error.message);
+      return;
+    }
 
     toast.success('Eredmények megjelenítve!');
     loadRoom();
   };
 
   const handleHideResults = async () => {
-    await supabase
+    const { error } = await supabase
       .from('rooms')
       .update({ show_results: false })
       .eq('room_code', code);
+
+    if (error) {
+      toast.error("Hiba történt: " + error.message);
+      return;
+    }
 
     loadRoom();
   };
@@ -238,8 +254,8 @@ export default function TeacherRoomControl() {
           )}
           <div className="mt-2">
             <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${isManualMode
-                ? 'bg-primary/10 text-primary'
-                : 'bg-secondary/10 text-secondary'
+              ? 'bg-primary/10 text-primary'
+              : 'bg-secondary/10 text-secondary'
               }`}>
               {isManualMode ? '🖐️ Manuális mód' : '⚡ Automatikus mód'}
             </span>
@@ -371,8 +387,8 @@ export default function TeacherRoomControl() {
               >
                 <div
                   className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${participant.finished_at
-                      ? 'bg-success text-success-foreground'
-                      : 'hero-gradient text-primary-foreground'
+                    ? 'bg-success text-success-foreground'
+                    : 'hero-gradient text-primary-foreground'
                     }`}
                 >
                   {participant.student_name[0].toUpperCase()}
