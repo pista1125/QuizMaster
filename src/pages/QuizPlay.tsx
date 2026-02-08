@@ -74,10 +74,48 @@ export default function QuizPlay() {
     loadQuiz();
   }, [code, navigate]);
 
-  // Subscribe to room changes for manual mode
+  // Subscribe to room changes for manual mode + polling fallback
   useEffect(() => {
     if (!roomData?.id || roomData.question_mode !== 'manual') return;
 
+    // Function to check room state and update UI
+    const checkRoomState = async () => {
+      const { data: room } = await supabase
+        .from('rooms')
+        .select('current_question_index, show_results, question_started_at')
+        .eq('id', roomData.id)
+        .single();
+
+      if (!room) return;
+
+      console.log('Room state check:', room);
+
+      // Handle question index changes
+      if (room.current_question_index !== null) {
+        if (room.current_question_index !== currentIndexRef.current || waitingForQuestionRef.current) {
+          console.log('Transitioning to question:', room.current_question_index);
+          setCurrentIndex(room.current_question_index);
+          setSelectedAnswer(null);
+          setShowResult(false);
+          setWaitingForQuestion(false);
+          setWaitingForResults(false);
+          setStartTime(Date.now());
+        }
+      }
+
+      // Handle show results
+      if (room.show_results) {
+        setWaitingForResults(true);
+        setShowResult(true);
+        loadQuestionResults(room.current_question_index);
+      } else if (room.show_results === false && waitingForResultsRef.current) {
+        setWaitingForResults(false);
+      }
+
+      setRoomData(prev => prev ? { ...prev, ...room } : prev);
+    };
+
+    // Realtime subscription
     const channel = supabase
       .channel(`room-${roomData.id}`)
       .on(
@@ -90,41 +128,21 @@ export default function QuizPlay() {
         },
         (payload) => {
           console.log('Realtime update received:', payload.new);
-          const newRoom = payload.new as any;
-
-          setRoomData(prev => prev ? { ...prev, ...newRoom } : prev);
-
-          if (newRoom.current_question_index !== null) {
-            const isTransition = newRoom.current_question_index !== currentIndexRef.current || waitingForQuestionRef.current;
-
-            if (isTransition) {
-              console.log('Transitioning to question:', newRoom.current_question_index);
-              setCurrentIndex(newRoom.current_question_index);
-              setSelectedAnswer(null);
-              setShowResult(false);
-              setWaitingForQuestion(false);
-              setWaitingForResults(false);
-              setStartTime(Date.now());
-            }
-          }
-
-          if (newRoom.show_results) {
-            setWaitingForResults(true);
-            setShowResult(true);
-            loadQuestionResults(newRoom.current_question_index);
-          } else if (newRoom.show_results === false && waitingForResultsRef.current) {
-            setWaitingForResults(false);
-          }
+          checkRoomState();
         }
       )
       .subscribe((status) => {
         console.log('Realtime subscription status:', status);
       });
 
+    // Polling fallback every 2 seconds
+    const pollInterval = setInterval(checkRoomState, 2000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
-  }, [roomData?.id, roomData?.question_mode, code]); // Minimal dependencies to prevent connection thrashing
+  }, [roomData?.id, roomData?.question_mode]);
 
   const loadQuiz = async () => {
     const { data: room, error } = await supabase
