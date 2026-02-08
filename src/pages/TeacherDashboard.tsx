@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { generateRoomCode } from '@/lib/quizGenerator';
 import { toast } from 'sonner';
+import { QuizService } from '@/services/QuizService';
 import { QuizCreator } from '@/components/teacher/QuizCreator';
 import {
   LogOut,
